@@ -7,6 +7,8 @@ const mongoose = require("mongoose");
 const session = require("express-session");
 const passport = require("passport");
 const passLocalMongoose = require("passport-local-mongoose");
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
+const findOrCreate = require("mongoose-findorcreate");
 
 const app = express();
 
@@ -17,7 +19,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 //initialize session
 app.use(
   session({
-    secret: "peepeepoopoo",
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
   })
@@ -35,6 +37,7 @@ const userSchema = new mongoose.Schema({
 
 //tap into passport local mongoose to hash and salt
 userSchema.plugin(passLocalMongoose);
+userSchema.plugin(findOrCreate);
 
 const User = new mongoose.model("User", userSchema);
 //remember: create strategy and serialize/deserialize after initializing session
@@ -43,9 +46,34 @@ passport.use(User.createStrategy());
 passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
 
+// use Google Auth strategy after session, serializing, deserializing
+passport.use(
+  new GoogleStrategy(
+    {
+      clientID: process.env.CLIENT_ID,
+      clientSecret: process.env.CLIENT_SECRET,
+      callbackURL: "http://localhost:3000/auth/google/secrets",
+      // google+ related requests are deprecated so you will need to add this line:
+      // userProfileURL: "https//www.googleapis.com/oauth2/v3/userinfo",
+    },
+    function (accessToken, refreshToken, profile, cb) {
+      User.findOrCreate({ googleId: profile.id }, function (err, user) {
+        return cb(err, user);
+      });
+    }
+  )
+);
+
+//routes
+
 app.get("/", function (req, res) {
   res.render("home");
 });
+
+app.get(
+  "/auth/google",
+  passport.authenticate("google", { scope: ["profile"] })
+);
 
 app.get("/login", function (req, res) {
   res.render("login");
@@ -106,5 +134,5 @@ app.post("/login", function (req, res) {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, function () {
-  console.log("Port started on port " + PORT);
+  console.log("SERVER!!!! started on port " + PORT);
 });
