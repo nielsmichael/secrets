@@ -33,6 +33,8 @@ mongoose.connect("mongodb://localhost:27017/userDB");
 const userSchema = new mongoose.Schema({
   email: String,
   password: String,
+  googleId: String,
+  secret: String,
 });
 
 //tap into passport local mongoose to hash and salt
@@ -40,11 +42,19 @@ userSchema.plugin(passLocalMongoose);
 userSchema.plugin(findOrCreate);
 
 const User = new mongoose.model("User", userSchema);
+
 //remember: create strategy and serialize/deserialize after initializing session
 passport.use(User.createStrategy());
 
-passport.serializeUser(User.serializeUser());
-passport.deserializeUser(User.deserializeUser());
+passport.serializeUser(function (user, done) {
+  done(null, user.id);
+});
+
+passport.deserializeUser(function (id, done) {
+  User.findById(id, function (err, user) {
+    done(err, user);
+  });
+});
 
 // use Google Auth strategy after session, serializing, deserializing
 passport.use(
@@ -54,7 +64,7 @@ passport.use(
       clientSecret: process.env.CLIENT_SECRET,
       callbackURL: "http://localhost:3000/auth/google/secrets",
       // google+ related requests are deprecated so you will need to add this line:
-      // userProfileURL: "https//www.googleapis.com/oauth2/v3/userinfo",
+      userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo",
     },
     function (accessToken, refreshToken, profile, cb) {
       User.findOrCreate({ googleId: profile.id }, function (err, user) {
@@ -73,6 +83,14 @@ app.get("/", function (req, res) {
 app.get(
   "/auth/google",
   passport.authenticate("google", { scope: ["profile"] })
+);
+
+app.get(
+  "/auth/google/secrets",
+  passport.authenticate("google", { failureRedirect: "/login" }),
+  function (req, res) {
+    res.redirect("/secrets");
+  }
 );
 
 app.get("/login", function (req, res) {
