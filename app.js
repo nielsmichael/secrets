@@ -109,6 +109,33 @@ app.get("/secrets", function (req, res) {
   }
 });
 
+app.get("/submit", function (req, res) {
+  if (req.isAuthenticated()) {
+    res.render("submit");
+  } else {
+    res.redirect("/login");
+  }
+});
+
+app.post("/submit", function (req, res) {
+  //store the submitted secret in a variable
+  const submittedSecret = req.body.secret;
+
+  //search user by id. pass in current session user with req.user
+  User.findById(req.user.id, function (err, foundUser) {
+    if (err) {
+      console.log(err);
+    } else {
+      if (foundUser) {
+        foundUser.secret = submittedSecret;
+        foundUser.save(function () {
+          res.redirect("/secrets");
+        });
+      }
+    }
+  });
+});
+
 app.get("/logout", function (req, res) {
   req.logOut();
   res.redirect("/");
